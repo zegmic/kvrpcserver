@@ -4,7 +4,9 @@ use actix_web::{HttpRequest, HttpResponse, post, Responder, web};
 use actix_web::http::header::ContentType;
 use actix_web::web::{Data, Json};
 use serde::{Deserialize, Serialize};
-use crate::kvservice::KVService;
+use crate::rate_limiting;
+use crate::storage::KVService;
+
 
 #[derive(Deserialize)]
 struct JSONRPCRequest {
@@ -63,8 +65,11 @@ fn rpc_error(id: i32, code: i32, message: &str) -> JSONRPCResponse {
 }
 
 #[post("/")]
-async fn index(svc: Data<Mutex<KVService>>, req: HttpRequest, json_request: web::Json<JSONRPCRequest>) -> JSONRPCResponse {
-    handle(svc, &json_request).await
+async fn index(storage: Data<Mutex<KVService>>, rate_limiting: Data<Mutex<rate_limiting::Service>>, req: HttpRequest, json_request: web::Json<JSONRPCRequest>) -> JSONRPCResponse {
+    if rate_limiting.lock().unwrap().limit_reached(req.connection_info().realip_remote_addr().unwrap_or("")) {
+        return rpc_error(json_request.id, 100429, "Rate limit reached");
+    }
+    handle(storage, &json_request).await
 }
 
 async fn handle(svc: Data<Mutex<KVService>>, json_request: &Json<JSONRPCRequest>) -> JSONRPCResponse {
