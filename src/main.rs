@@ -1,3 +1,4 @@
+use std::env;
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -11,7 +12,8 @@ mod rate_limiting;
 
 #[actix_web::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let client = Client::open("redis://0.0.0.0:6379/")?;
+    let redis_url = env::var("REDIS_URL").unwrap();
+    let client = Client::open(redis_url)?;
     let conn = client.get_multiplexed_async_connection().await.unwrap();
     let kv_service = storage::KVService::new(conn);
     let rate_limiting = rate_limiting::Service::new(Duration::from_secs(10), 1);

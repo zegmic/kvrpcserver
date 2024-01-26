@@ -15,6 +15,6 @@ impl Service {
     }
 
     pub fn limit_reached(&self, ip: &str) -> bool {
-        true
+        false
     }
 }
