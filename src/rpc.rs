@@ -65,8 +65,8 @@ fn rpc_error(id: i32, code: i32, message: &str) -> JSONRPCResponse {
 }
 
 #[post("/")]
-async fn index(storage: Data<Mutex<KVService>>, rate_limiting: Data<Mutex<rate_limiting::Service>>, req: HttpRequest, json_request: web::Json<JSONRPCRequest>) -> JSONRPCResponse {
-    if rate_limiting.lock().unwrap().limit_reached(req.connection_info().realip_remote_addr().unwrap_or("")) {
+async fn index(storage: Data<Mutex<KVService>>, rate_limiting: Data<Mutex<rate_limiting::Service>>, req: HttpRequest, json_request: Json<JSONRPCRequest>) -> JSONRPCResponse {
+    if rate_limiting.lock().unwrap().limit_reached(req.connection_info().realip_remote_addr().unwrap_or("noip")).await {
         return rpc_error(json_request.id, 100429, "Rate limit reached");
     }
     handle(storage, &json_request).await

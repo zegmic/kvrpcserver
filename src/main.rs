@@ -11,12 +11,14 @@ mod rpc;
 mod rate_limiting;
 
 #[actix_web::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> anyhow::Result<()> {
     let redis_url = env::var("REDIS_URL").unwrap();
     let client = Client::open(redis_url)?;
-    let conn = client.get_multiplexed_async_connection().await.unwrap();
+    let conn = client.get_multiplexed_async_connection().await?;
     let kv_service = storage::KVService::new(conn);
-    let rate_limiting = rate_limiting::Service::new(Duration::from_secs(10), 1);
+
+    let conn2 = client.get_multiplexed_async_connection().await?;
+    let rate_limiting = rate_limiting::Service::new(Duration::from_secs(10), 1, conn2);
 
     HttpServer::new(move || App::new()
         .app_data(Data::new(Mutex::new(kv_service.clone())))
