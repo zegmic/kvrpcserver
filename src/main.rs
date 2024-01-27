@@ -18,7 +18,7 @@ async fn main() -> anyhow::Result<()> {
     let kv_service = storage::KVService::new(conn);
 
     let conn2 = client.get_multiplexed_async_connection().await?;
-    let rate_limiting = rate_limiting::Service::new(Duration::from_secs(10), 1, conn2);
+    let rate_limiting = rate_limiting::Service::new(Duration::from_secs(1), 1, conn2);
 
     HttpServer::new(move || App::new()
         .app_data(Data::new(Mutex::new(kv_service.clone())))

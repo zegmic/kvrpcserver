@@ -19,9 +19,15 @@ impl Service {
     }
 
     pub async fn limit_reached(&mut self, ip: &str) -> bool {
-        // let res: RedisResult<String> = redis::pipe()
-        //     .hget("", ip)
-        //     .query_async(&mut self.db).await;
-        false
+        let key = format!("req_{}", &ip);
+        let res: RedisResult<Vec<Vec<u32>>> = redis::pipe()
+            .atomic()
+            .cmd("BITFIELD").arg(&key).arg("OVERFLOW").arg("SAT").arg("INCRBY").arg("u32").arg(0).arg(1)
+            .cmd("EXPIRE").arg(&key).arg(self.time.as_secs()).arg("NX").ignore()
+            .query_async(&mut self.db).await;
+        if res.is_err() {
+            return true;
+        }
+        *res.unwrap().first().unwrap().first().unwrap() > self.limit
     }
 }
