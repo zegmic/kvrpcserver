@@ -1,6 +1,8 @@
 use std::time::Duration;
 use redis::aio::MultiplexedConnection;
 use redis::RedisResult;
+use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc::Sender;
 
 #[derive(Clone)]
 pub struct Service {
@@ -9,13 +11,37 @@ pub struct Service {
     db: MultiplexedConnection,
 }
 
+pub enum Command {
+    LimitReached {
+        ip: String,
+        res: oneshot::Sender<bool>,
+    }
+}
+
 impl Service {
     pub fn new(time: Duration, limit: u32, db: MultiplexedConnection) -> Self {
         Service {
             time,
             limit,
-            db
+            db,
         }
+    }
+
+    pub fn run(mut self) -> Sender<Command> {
+        let (tx, mut rx) = mpsc::channel::<Command>(256);
+
+        tokio::spawn(async move {
+            while let Some(cmd) = rx.recv().await {
+                match cmd {
+                    Command::LimitReached { ip, res } => {
+                        let limit_reached = self.limit_reached(ip.as_str()).await;
+                        res.send(limit_reached).unwrap();
+                    }
+                }
+            }
+        });
+
+        tx
     }
 
     pub async fn limit_reached(&mut self, ip: &str) -> bool {

@@ -1,11 +1,9 @@
 use std::env;
-use std::sync::Mutex;
 use std::time::Duration;
 
 use actix_web::{App, HttpServer};
 use actix_web::web::Data;
 use redis::Client;
-use tokio::sync::mpsc;
 
 mod storage;
 mod rpc;
@@ -16,17 +14,16 @@ async fn main() -> anyhow::Result<()> {
     let redis_url = env::var("REDIS_URL").unwrap();
     let client = Client::open(redis_url)?;
     let conn = client.get_multiplexed_async_connection().await?;
-    let mut kv_service = storage::KVService::new(conn);
-    let kv_sender = kv_service.run();
 
-    let conn2 = client.get_multiplexed_async_connection().await?;
-    let rate_limiting = rate_limiting::Service::new(Duration::from_secs(1), 1, conn2);
+    let kv_service = storage::KVService::new(conn.clone());
+    let kv_tx = kv_service.run();
 
-
+    let rate_limiting = rate_limiting::Service::new(Duration::from_secs(1), 1, conn.clone());
+    let rate_limiting_tx = rate_limiting.run();
 
     HttpServer::new(move || App::new()
-        .app_data(Data::new(kv_sender.clone()))
-        .app_data(Data::new(Mutex::new(rate_limiting.clone())))
+        .app_data(Data::new(kv_tx.clone()))
+        .app_data(Data::new(rate_limiting_tx.clone()))
         .service(rpc::index))
         .bind(("0.0.0.0", 8080))?
         .run()

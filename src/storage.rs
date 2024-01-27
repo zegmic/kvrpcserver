@@ -28,11 +28,11 @@ impl KVService {
                 match cmd {
                     Command::Get { key, res} => {
                         let db_result = self.get(key).await;
-                        _ = res.send(db_result);
+                        res.send(db_result).unwrap();
                     },
                     Command::Set { key, value, res} => {
                         let db_result = self.set(key, value).await;
-                        _ = res.send(db_result);
+                        res.send(db_result).unwrap();
                     }
                 }
             }

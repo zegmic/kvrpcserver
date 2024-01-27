@@ -1,15 +1,12 @@
-use std::process::Command;
-use std::sync::Mutex;
+use actix_web::{HttpRequest, HttpResponse, post, Responder};
 use actix_web::body::BoxBody;
-use actix_web::{HttpRequest, HttpResponse, post, Responder, web};
 use actix_web::http::header::ContentType;
 use actix_web::web::{Data, Json};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot;
-use crate::{rate_limiting, storage};
-use crate::storage::KVService;
 
+use crate::{rate_limiting, storage};
 
 #[derive(Deserialize)]
 struct JSONRPCRequest {
@@ -68,8 +65,15 @@ fn rpc_error(id: i32, code: i32, message: &str) -> JSONRPCResponse {
 }
 
 #[post("/")]
-async fn index(storage_tx: Data<Sender<storage::Command>>, rate_limiting: Data<Mutex<rate_limiting::Service>>, req: HttpRequest, json_request: Json<JSONRPCRequest>) -> JSONRPCResponse {
-    if rate_limiting.lock().unwrap().limit_reached(req.connection_info().realip_remote_addr().unwrap_or("noip")).await {
+async fn index(storage_tx: Data<Sender<storage::Command>>, rate_limiting_tx: Data<Sender<rate_limiting::Command>>, req: HttpRequest, json_request: Json<JSONRPCRequest>) -> JSONRPCResponse {
+    let (res_tx, res_rx) = oneshot::channel();
+    let command = rate_limiting::Command::LimitReached {
+        ip: req.connection_info().realip_remote_addr().unwrap_or("noip").to_string(),
+        res: res_tx
+    };
+
+    rate_limiting_tx.send(command).await.unwrap();
+    if res_rx.await.unwrap() {
         return rpc_error(json_request.id, 100429, "Rate limit reached");
     }
 
@@ -91,7 +95,7 @@ async fn handle_set(tx: &Sender<storage::Command>, json_request: &&Json<JSONRPCR
 
     let (res_tx, res_rx) = oneshot::channel();
     let command = storage::Command::Set {
-        key: json_request.params.get(0).unwrap().to_string(),
+        key: json_request.params.first().unwrap().to_string(),
         value: json_request.params.get(1).unwrap().to_string(),
         res: res_tx
     };
@@ -113,7 +117,7 @@ async fn handle_get(tx: &Sender<storage::Command>, json_request: &&Json<JSONRPCR
 
     let (res_tx, res_rx) = oneshot::channel();
     let command = storage::Command::Get {
-        key: json_request.params.get(0).unwrap().to_string(),
+        key: json_request.params.first().unwrap().to_string(),
         res: res_tx
     };
     tx.send(command).await.unwrap();
