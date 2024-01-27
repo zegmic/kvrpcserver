@@ -10,7 +10,8 @@ use crate::{rate_limiting, storage};
 
 #[derive(Deserialize)]
 struct JSONRPCRequest {
-    jsonrpc: String,
+    #[serde(rename = "jsonrpc")]
+    _json_rpc: String,
     method: String,
     id: i32,
     params: Vec<String>,
@@ -18,7 +19,8 @@ struct JSONRPCRequest {
 
 #[derive(Serialize)]
 struct JSONRPCOkResponse {
-    jsonrpc: String,
+    #[serde(rename = "jsonrpc")]
+    json_rpc: String,
     result: String,
     id: i32,
 }
@@ -102,7 +104,7 @@ async fn handle_set(tx: &Sender<storage::Command>, json_request: &&Json<JSONRPCR
     tx.send(command).await.unwrap();
     match res_rx.await.unwrap() {
         Ok(_) => JSONRPCResponse::Ok(JSONRPCOkResponse {
-            jsonrpc: "2.0".to_string(),
+            json_rpc: "2.0".to_string(),
             result: "value inserted".to_string(),
             id: json_request.id,
         }),
@@ -124,7 +126,7 @@ async fn handle_get(tx: &Sender<storage::Command>, json_request: &&Json<JSONRPCR
 
     match res_rx.await.unwrap() {
         Ok(res) => JSONRPCResponse::Ok(JSONRPCOkResponse {
-            jsonrpc: "2.0".to_string(),
+            json_rpc: "2.0".to_string(),
             result: res,
             id: json_request.id,
         }),
