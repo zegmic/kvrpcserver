@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use redis::aio::MultiplexedConnection;
 use redis::AsyncCommands;
 
@@ -13,17 +14,16 @@ impl KVService {
         }
     }
 
-    pub async fn get(&mut self, params: &Vec<String>) -> Result<String, String> {
-        let val = self.db.get::<String, String>(params.get(0).unwrap().to_string())
-            .await
-            .unwrap();
+    pub async fn get(&mut self, params: &[String]) -> anyhow::Result<String> {
+        let key = params.first().ok_or(anyhow!("No key provided"))?.to_string();
+        let val = self.db.get::<String, String>(key).await?;
         Ok(val)
     }
 
-    pub async fn set(&mut self, params: &Vec<String>) -> Result<String, String> {
-        self.db.set::<String, String, ()>(params.get(0).unwrap().to_string(), params.get(1).unwrap().to_string())
-            .await
-            .unwrap();
-        Ok("ok".to_string())
+    pub async fn set(&mut self, params: &[String]) -> anyhow::Result<()> {
+        let key = params.get(0).ok_or(anyhow!("No key provided"))?.to_string();
+        let value = params.get(1).ok_or(anyhow!("No value provided"))?.to_string();
+        self.db.set::<String, String, ()>(key, value).await?;
+        Ok(())
     }
 }
