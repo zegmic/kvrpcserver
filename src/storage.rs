@@ -1,11 +1,10 @@
-use redis::aio::MultiplexedConnection;
-use redis::AsyncCommands;
+use redis::{aio::ConnectionManager, AsyncCommands};
 use tokio::sync::{mpsc, oneshot};
 use tokio::sync::mpsc::Sender;
 
 #[derive(Clone)]
 pub struct KVService {
-    db: MultiplexedConnection,
+    db: ConnectionManager,
 }
 
 pub enum Command {
@@ -14,7 +13,7 @@ pub enum Command {
 }
 
 impl KVService {
-    pub fn new(db: MultiplexedConnection) -> Self {
+    pub fn new(db: ConnectionManager) -> Self {
         Self {
             db
         }

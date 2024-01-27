@@ -1,6 +1,5 @@
 use std::time::Duration;
-use redis::aio::MultiplexedConnection;
-use redis::RedisResult;
+use redis::{RedisResult, aio::ConnectionManager};
 use tokio::sync::{mpsc, oneshot};
 use tokio::sync::mpsc::Sender;
 
@@ -8,7 +7,7 @@ use tokio::sync::mpsc::Sender;
 pub struct Service {
     time: Duration,
     limit: u32,
-    db: MultiplexedConnection,
+    db: ConnectionManager,
 }
 
 pub enum Command {
@@ -19,7 +18,7 @@ pub enum Command {
 }
 
 impl Service {
-    pub fn new(time: Duration, limit: u32, db: MultiplexedConnection) -> Self {
+    pub fn new(time: Duration, limit: u32, db: ConnectionManager) -> Self {
         Service {
             time,
             limit,

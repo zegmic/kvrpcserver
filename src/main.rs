@@ -13,12 +13,12 @@ mod rate_limiting;
 async fn main() -> anyhow::Result<()> {
     let redis_url = env::var("REDIS_URL").unwrap();
     let client = Client::open(redis_url)?;
-    let conn = client.get_multiplexed_async_connection().await?;
+    let manager = redis::aio::ConnectionManager::new(client).await?;
 
-    let kv_service = storage::KVService::new(conn.clone());
+    let kv_service = storage::KVService::new(manager.clone());
     let kv_tx = kv_service.run();
 
-    let rate_limiting = rate_limiting::Service::new(Duration::from_secs(1), 1, conn.clone());
+    let rate_limiting = rate_limiting::Service::new(Duration::from_secs(1), 1, manager.clone());
     let rate_limiting_tx = rate_limiting.run();
 
     HttpServer::new(move || App::new()
