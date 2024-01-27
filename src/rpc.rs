@@ -84,15 +84,14 @@ async fn handle_set(svc: &Data<Mutex<KVService>>, json_request: &&Json<JSONRPCRe
     if json_request.params.len() != 2 {
         return rpc_error(json_request.id, -32602, "Two parameters are required for set function")
     }
-    let result = svc.lock().unwrap().set(&json_request.params).await;
-    if result.is_ok() {
-        return JSONRPCResponse::Ok(JSONRPCOkResponse {
+    match svc.lock().unwrap().set(&json_request.params).await {
+        Ok(_) => JSONRPCResponse::Ok(JSONRPCOkResponse {
             jsonrpc: "2.0".to_string(),
             result: "value inserted".to_string(),
             id: json_request.id,
-        });
+        }),
+        Err(err) => rpc_error(json_request.id, -32603, err.to_string().as_str())
     }
-    rpc_error(json_request.id, -32603, result.err().unwrap().to_string().as_str())
 }
 
 async fn handle_get(svc: &Data<Mutex<KVService>>, json_request: &&Json<JSONRPCRequest>) -> JSONRPCResponse {
@@ -100,9 +99,12 @@ async fn handle_get(svc: &Data<Mutex<KVService>>, json_request: &&Json<JSONRPCRe
         return rpc_error(json_request.id, -32602, "One parameter is required for set function")
     }
 
-    JSONRPCResponse::Ok(JSONRPCOkResponse {
-        jsonrpc: "2.0".to_string(),
-        result: svc.lock().unwrap().get(&json_request.params).await.ok().unwrap_or("ERR".to_string()),
-        id: json_request.id,
-    })
+    match svc.lock().unwrap().get(&json_request.params).await{
+        Ok(res) => JSONRPCResponse::Ok(JSONRPCOkResponse {
+            jsonrpc: "2.0".to_string(),
+            result: res,
+            id: json_request.id,
+        }),
+        Err(err) => rpc_error(json_request.id, -32603, err.to_string().as_str())
+    }
 }
