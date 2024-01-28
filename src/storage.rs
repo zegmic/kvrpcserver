@@ -1,3 +1,4 @@
+use log::{debug, error};
 use redis::{aio::ConnectionManager, AsyncCommands};
 use tokio::sync::{mpsc, oneshot};
 use tokio::sync::mpsc::Sender;
@@ -7,6 +8,7 @@ pub struct KVService {
     db: ConnectionManager,
 }
 
+#[derive(Debug)]
 pub enum Command {
     Get { key: String, res: oneshot::Sender<anyhow::Result<String>> },
     Set { key: String, value: String, res: oneshot::Sender<anyhow::Result<()>> }
@@ -24,13 +26,20 @@ impl KVService {
 
         tokio::spawn(async move {
             while let Some(cmd) = rx.recv().await {
+                debug!("Processing storage command {:?}", cmd);
                 match cmd {
                     Command::Get { key, res} => {
                         let db_result = self.get(key).await;
+                        if let Err(err) = &db_result {
+                            error!("Error getting the value from storage service: {}", err);
+                        }
                         res.send(db_result).unwrap();
                     },
                     Command::Set { key, value, res} => {
                         let db_result = self.set(key, value).await;
+                        if let Err(err) = &db_result {
+                            error!("Error setting the value in storage service: {}", err);
+                        }
                         res.send(db_result).unwrap();
                     }
                 }

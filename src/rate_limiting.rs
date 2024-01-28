@@ -1,4 +1,5 @@
 use std::time::Duration;
+use log::error;
 use redis::{RedisResult, aio::ConnectionManager};
 use tokio::sync::{mpsc, oneshot};
 use tokio::sync::mpsc::Sender;
@@ -51,6 +52,7 @@ impl Service {
             .cmd("EXPIRE").arg(&key).arg(self.time.as_secs()).arg("NX").ignore()
             .query_async(&mut self.db).await;
         if res.is_err() {
+            error!("Couldn't access Redis: {}", res.err().unwrap());
             return true;
         }
         *res.unwrap().first().unwrap().first().unwrap() > self.limit

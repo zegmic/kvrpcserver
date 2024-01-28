@@ -2,13 +2,14 @@ use actix_web::{HttpRequest, HttpResponse, post, Responder};
 use actix_web::body::BoxBody;
 use actix_web::http::header::ContentType;
 use actix_web::web::{Data, Json};
+use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot;
 
 use crate::{rate_limiting, storage};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 struct JSONRPCRequest {
     #[serde(rename = "jsonrpc")]
     _json_rpc: String,
@@ -69,14 +70,18 @@ fn rpc_error(id: i32, code: i32, message: &str) -> JSONRPCResponse {
 
 #[post("/")]
 async fn index(storage_tx: Data<Sender<storage::Command>>, rate_limiting_tx: Data<Sender<rate_limiting::Command>>, req: HttpRequest, json_request: Json<JSONRPCRequest>) -> JSONRPCResponse {
+    info!("Handling request: {:?}", json_request);
     let (res_tx, res_rx) = oneshot::channel();
     let command = rate_limiting::Command::LimitReached {
         ip: req.connection_info().realip_remote_addr().unwrap_or("noip").to_string(),
         res: res_tx,
     };
 
-    rate_limiting_tx.send(command).await.unwrap();
+    if let Err(err) = rate_limiting_tx.send(command).await {
+        error!("Error sending message to rate limiting service: {}", err);
+    }
     if res_rx.await.unwrap() {
+        debug!("Requests limit reached for request: {:?}", json_request);
         return rpc_error(json_request.id, 100429, "Rate limit reached");
     }
 
@@ -93,6 +98,7 @@ async fn handle(tx: &Sender<storage::Command>, json_request: &Json<JSONRPCReques
 
 async fn handle_set(tx: &Sender<storage::Command>, json_request: &&Json<JSONRPCRequest>) -> JSONRPCResponse {
     if json_request.params.len() != 2 {
+        debug!("Invalid number of parameters for set command");
         return rpc_error(json_request.id, -32602, "Two parameters are required for set function");
     }
 
@@ -102,19 +108,29 @@ async fn handle_set(tx: &Sender<storage::Command>, json_request: &&Json<JSONRPCR
         value: json_request.params.get(1).unwrap().to_string(),
         res: res_tx,
     };
-    tx.send(command).await.unwrap();
+    if let Err(err) = tx.send(command).await {
+        error!("Error sending message to storage service: {}", err);
+    }
+
     match res_rx.await.unwrap() {
-        Ok(_) => JSONRPCResponse::Ok(JSONRPCOkResponse {
-            json_rpc: "2.0".to_string(),
-            result: "value inserted".to_string(),
-            id: json_request.id,
-        }),
-        Err(err) => rpc_error(json_request.id, -32603, err.to_string().as_str())
+        Ok(_) => {
+            info!("Successfully handled a request");
+            JSONRPCResponse::Ok(JSONRPCOkResponse {
+                json_rpc: "2.0".to_string(),
+                result: "value inserted".to_string(),
+                id: json_request.id,
+            })
+        },
+        Err(err) => {
+            error!("Error occurred while processing a request: {}", err);
+            rpc_error(json_request.id, -32603, err.to_string().as_str())
+        }
     }
 }
 
 async fn handle_get(tx: &Sender<storage::Command>, json_request: &&Json<JSONRPCRequest>) -> JSONRPCResponse {
     if json_request.params.len() != 1 {
+        debug!("Invalid number of parameters for set command");
         return rpc_error(json_request.id, -32602, "One parameter is required for set function");
     }
 
@@ -123,15 +139,24 @@ async fn handle_get(tx: &Sender<storage::Command>, json_request: &&Json<JSONRPCR
         key: json_request.params.first().unwrap().to_string(),
         res: res_tx,
     };
-    tx.send(command).await.unwrap();
+
+    if let Err(err) = tx.send(command).await {
+        error!("Error sending message to storage service: {}", err);
+    }
 
     match res_rx.await.unwrap() {
-        Ok(res) => JSONRPCResponse::Ok(JSONRPCOkResponse {
-            json_rpc: "2.0".to_string(),
-            result: res,
-            id: json_request.id,
-        }),
-        Err(err) => rpc_error(json_request.id, -32603, err.to_string().as_str())
+        Ok(res) => {
+            info!("Successfully handled a request");
+            JSONRPCResponse::Ok(JSONRPCOkResponse {
+                json_rpc: "2.0".to_string(),
+                result: res,
+                id: json_request.id,
+            })
+        },
+        Err(err) => {
+            error!("Error occurred while processing a request: {}", err);
+            rpc_error(json_request.id, -32603, err.to_string().as_str())
+        }
     }
 }
 

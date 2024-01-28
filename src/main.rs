@@ -11,6 +11,7 @@ mod rate_limiting;
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
+    env_logger::init();
     let redis_url = env::var("REDIS_URL").unwrap();
     let client = Client::open(redis_url)?;
     let manager = redis::aio::ConnectionManager::new(client).await?;
